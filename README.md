@@ -1,5 +1,5 @@
 # SuperResolution-
-超分辨率SuperResolution 
+超分辨率SuperResolution \n
 Student: ZhijuePeng
 School: NEU
 Code:python
