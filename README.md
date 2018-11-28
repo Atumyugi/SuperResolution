@@ -1,4 +1,4 @@
-# SuperResolution-
+# SuperResolution
 超分辨率SuperResolution   
 Student: ZhijuePeng  
 School: NEU  
