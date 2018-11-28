@@ -1,0 +1,156 @@
+from keras.models import Sequential
+from keras.layers import Conv2D, Input, BatchNormalization
+# from keras.layers.advanced_activations import LeakyReLU
+from keras.callbacks import ModelCheckpoint
+from keras.optimizers import SGD, Adam
+import prepare_data as pd
+import numpy
+import cv2
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' #解决报错
+import math
+def model():
+    # lrelu = LeakyReLU(alpha=0.1)
+    SRCNN = Sequential()
+    #SRCNN.add(Conv2D(nb_filter=128, nb_row=9, nb_col=9, init='glorot_uniform',
+    #                 activation='relu', border_mode='valid', bias=True, input_shape=(32, 32, 1)))
+    #keras1.x 写法是上面那种,会有报错,查询API后,改写为下面这种
+    SRCNN.add(Conv2D(
+        128,(9,9),
+        input_shape=(32, 32, 1),
+        kernel_initializer='glorot_uniform',
+        activation='relu',
+        padding='valid',
+        use_bias=True,
+    ))
+    '''
+    Patch_size = 32
+    第一层卷积为9*9 特征图尺寸为(32-9)/1+1=24
+    '''
+
+    #SRCNN.add(Conv2D(nb_filter=64, nb_row=3, nb_col=3, init='glorot_uniform',
+    #                activation='relu', border_mode='same', bias=True))
+    SRCNN.add(Conv2D(
+        64,(3,3),
+        kernel_initializer='glorot_uniform',
+        activation='relu',
+        padding='same',
+        use_bias=True,
+    ))
+    '''
+    第二层卷积为1*1 特征图尺寸为由于使用了padding=same,所以尺寸还是24
+    '''
+
+
+    # SRCNN.add(BatchNormalization())  可不加这一层,加了效果更差?
+    #SRCNN.add(Conv2D(nb_filter=1, nb_row=5, nb_col=5, init='glorot_uniform',
+    #                 activation='linear', border_mode='valid', bias=True))
+    SRCNN.add(Conv2D(
+        1, (5, 5),
+        kernel_initializer='glorot_uniform',
+        activation='linear',
+        padding='valid',
+        use_bias=True,
+    ))
+    '''
+        第三层卷积为5*5 特征图尺寸为(24-5)/1+1=20 即为label_size = 20
+    '''
+
+    adam = Adam(lr=0.0003)
+    #优化器:Adam   损失函数:Mse
+    SRCNN.compile(optimizer=adam, loss='mean_squared_error', metrics=['mean_squared_error'])
+    return SRCNN
+def train():
+    srcnn_model = model()
+    print(srcnn_model.summary())
+    data, label = pd.read_training_data("crop_train.h5")  #data.shape(14901,32,32,1)
+    val_data, val_label = pd.read_training_data("test.h5")
+
+    #保存模型在SRCNN_check.h5中
+    checkpoint = ModelCheckpoint("SRCNN_check.h5", monitor='val_loss', verbose=1, save_best_only=True,
+                                 save_weights_only=False, mode='min')
+    callbacks_list = [checkpoint]
+
+    srcnn_model.fit(data, label, batch_size=128, validation_data=(val_data, val_label),
+                    callbacks=callbacks_list, shuffle=True, epochs=100, verbose=0)
+    # srcnn_model.load_weights("m_model_adam.h5")
+def predict_model():
+    SRCNN = Sequential()
+    SRCNN.add(Conv2D(
+        128,(9,9),
+        input_shape=(None,None, 1),
+        kernel_initializer='glorot_uniform',
+        activation='relu',
+        padding='valid',
+        use_bias=True,
+    ))
+    SRCNN.add(Conv2D(
+        64,(3,3),
+        kernel_initializer='glorot_uniform',
+        activation='relu',
+        padding='same',
+        use_bias=True,
+    ))
+    SRCNN.add(Conv2D(
+        1, (5, 5),
+        kernel_initializer='glorot_uniform',
+        activation='linear',
+        padding='valid',
+        use_bias=True,
+    ))
+    adam = Adam(lr=0.0003)
+    #优化器:Adam   损失函数:Mse
+    SRCNN.compile(optimizer=adam, loss='mean_squared_error', metrics=['mean_squared_error'])
+    return SRCNN
+def predict(img,Magnification):
+    srcnn_model = predict_model()
+    srcnn_model.load_weights("3051crop_weight_200.h5") #SRCNN_check.h5 是train训练的h5文件,这里我使用了训练50个训练集的参数文件
+    IMG_NAME = img
+    INPUT_NAME = "input2.jpg"
+    OUTPUT_NAME = "pre2.jpg"
+
+
+    img = cv2.imread(IMG_NAME, cv2.IMREAD_COLOR)
+    cv2.imshow('source', img)   #原图像
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)  #使用YCrcb 模式
+    shape = img.shape
+    img = cv2.resize(img, (int(Magnification*shape[1]), int(Magnification*shape[0])), cv2.INTER_CUBIC)
+    shape = img.shape
+    Y_img = cv2.resize(img[:, :, 0], (int(shape[1] / 2), int(shape[0] / 2)), cv2.INTER_CUBIC)
+    Y_img = cv2.resize(Y_img, (shape[1], shape[0]), cv2.INTER_CUBIC)
+    img[:, :, 0] = Y_img   #CUBIC放大缩小处理后的图像
+    img = cv2.cvtColor(img, cv2.COLOR_YCrCb2BGR)
+    cv2.imwrite(INPUT_NAME, img)
+
+    Y = numpy.zeros((1, img.shape[0], img.shape[1], 1), dtype=float)
+    Y[0, :, :, 0] = Y_img.astype(float) / 255.
+    pre = srcnn_model.predict(Y, batch_size=1) * 255.
+    pre[pre[:] > 255] = 255
+    pre[pre[:] < 0] = 0
+    pre = pre.astype(numpy.uint8)
+
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+
+    img[6: -6, 6: -6, 0] = pre[0, :, :, 0]
+
+    img = cv2.cvtColor(img, cv2.COLOR_YCrCb2BGR)
+    cv2.imwrite(OUTPUT_NAME, img)
+
+    # psnr calculation:
+    im1 = cv2.imread(IMG_NAME, cv2.IMREAD_COLOR)
+    im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2YCrCb)[6: -6, 6: -6, 0]
+    im2 = cv2.imread(INPUT_NAME, cv2.IMREAD_COLOR)
+    cv2.imshow('cubic', im2)
+    im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2YCrCb)[6: -6, 6: -6, 0]
+    im3 = cv2.imread(OUTPUT_NAME, cv2.IMREAD_COLOR)
+    cv2.imshow('srcnn', im3)
+    cv2.waitKey(0)
+    im3 = cv2.cvtColor(im3, cv2.COLOR_BGR2YCrCb)[6: -6, 6: -6, 0]
+
+    #print("bicubic:")          一倍的放大倍数才可以看,除非把im2和im3的图像尺寸改到和im1一样
+    #print(cv2.PSNR(im1, im2))
+    #print("SRCNN:")
+    #print(cv2.PSNR(im1, im3))
+
+train()
+predict(r'E:\SRCNN\Test\Set14\man.bmp',1.5)  #1.5就是放大倍数
