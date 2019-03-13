@@ -1,9 +1,9 @@
 # SuperResolution
 超分辨率SuperResolution  
-Tutor: WeiZhang  
+Supervisor: WeiZhang   
 Student: ZhijuePeng  
-School: NEU  
-Code:python  
+School: NEU  （东北大学）
+Code:python & matlab  
 >Relevant library :
 >>                  OpenCV2 for python  
 >>                  numpy  
