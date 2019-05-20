@@ -104,7 +104,7 @@ class MY(nn.Module):
     def __init__(self, conv=common.default_conv):
         super(MY, self).__init__()
 
-        n_resgroups = 1
+        n_resgroups = 10
         n_resblocks = 20
         n_feats = 64
         kernel_size = 3
