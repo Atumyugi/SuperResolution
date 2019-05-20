@@ -43,6 +43,8 @@ def SSIM(im1,im2,imrange = 255):
     ssim = measure.compare_ssim(im1,im2,data_range=imrange,multichannel=True)
     return ssim
 
+
+
 def WDSR_eval(testimg_path,labelimg_path,test_directory_path,label_directory_path,wdsr_model):
 
 
@@ -111,3 +113,19 @@ def adjust_learning_rate(epoch,lr):
     """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
     lr = lr * (0.5 ** (epoch // 50))  # init 0.1 epoch 100
     return lr
+
+def load_dataset(file,batchSize):
+    with h5py.File(file,'r') as hf:
+        data = np.array(hf.get('data'))
+        label = np.array(hf.get('label'))
+        print(data.shape)
+        print(label.shape)
+    train_data = torch.from_numpy(data)
+    train_data = torch.tensor(train_data)
+    train_label = torch.from_numpy(label)
+    train_label = torch.tensor(train_label)
+    print(train_data.shape,train_label.shape)
+    dataset = dataf.TensorDataset(train_data,train_label)
+    loader = dataf.DataLoader(dataset,batch_size=batchSize,shuffle=True)
+
+    return loader
