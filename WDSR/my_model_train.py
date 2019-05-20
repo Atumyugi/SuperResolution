@@ -10,7 +10,7 @@ import skimage.measure as measure
 import argparse, os
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1'
 from WDSR import common_utils
 from WDSR import config
 parser = config.get_args()
